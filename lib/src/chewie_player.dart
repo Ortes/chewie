@@ -121,20 +121,26 @@ class ChewieState extends State<Chewie> {
   ) {
     return Scaffold(
       resizeToAvoidBottomInset: false,
-      body: GestureDetector(
-        onVerticalDragEnd: (DragEndDetails details) {
-          // A positive dy indicates a downward swipe. Use a threshold to avoid accidental triggers.
-          final double dy = details.primaryVelocity ?? 0;
-          if (dy > 300) {
-            widget.controller.exitFullScreen();
-          }
-        },
-        child: Container(
-          alignment: Alignment.center,
-          color: Colors.black,
-          child: controllerProvider,
-        ),
-      ),
+      body: widget.controller.swipeToExitFullscreen
+          ? GestureDetector(
+              onVerticalDragEnd: (DragEndDetails details) {
+                // A positive dy indicates a downward swipe. Use a threshold to avoid accidental triggers.
+                final double dy = details.primaryVelocity ?? 0;
+                if (dy > widget.controller.swipeThreshold) {
+                  widget.controller.exitFullScreen();
+                }
+              },
+              child: Container(
+                alignment: Alignment.center,
+                color: Colors.black,
+                child: controllerProvider,
+              ),
+            )
+          : Container(
+              alignment: Alignment.center,
+              color: Colors.black,
+              child: controllerProvider,
+            ),
     );
   }
 
@@ -376,6 +382,8 @@ class ChewieController extends ChangeNotifier {
     this.controlsSafeAreaMinimum = EdgeInsets.zero,
     this.pauseOnBackgroundTap = false,
     this.chapters = const [],
+    this.swipeToExitFullscreen = true,
+    this.swipeThreshold = 300,
   }) : assert(
          playbackSpeeds.every((speed) => speed > 0),
          'The playbackSpeeds values must all be greater than 0',
@@ -443,6 +451,8 @@ class ChewieController extends ChangeNotifier {
     routePageBuilder,
     bool? pauseOnBackgroundTap,
     List<ChewieChapter>? chapters,
+    bool? swipeToExitFullscreen,
+    double? swipeThreshold,
   }) {
     return ChewieController(
       draggableProgressBar: draggableProgressBar ?? this.draggableProgressBar,
@@ -512,6 +522,9 @@ class ChewieController extends ChangeNotifier {
           progressIndicatorDelay ?? this.progressIndicatorDelay,
       pauseOnBackgroundTap: pauseOnBackgroundTap ?? this.pauseOnBackgroundTap,
       chapters: chapters ?? this.chapters,
+      swipeToExitFullscreen:
+          swipeToExitFullscreen ?? this.swipeToExitFullscreen,
+      swipeThreshold: swipeThreshold ?? this.swipeThreshold,
     );
   }
 
@@ -722,6 +735,13 @@ class ChewieController extends ChangeNotifier {
     }
     return true;
   }
+
+  /// Defines if the player allows swipe to exit fullscreen
+  final bool swipeToExitFullscreen;
+
+  /// Defines the minimum velocity threshold for swipe to exit fullscreen gesture
+  /// The velocity is measured in pixels per second
+  final double swipeThreshold;
 
   static ChewieController of(BuildContext context) {
     final chewieControllerProvider = context
