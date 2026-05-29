@@ -6,9 +6,11 @@ import 'package:chewie/src/chewie_player.dart';
 import 'package:chewie/src/chewie_progress_colors.dart';
 import 'package:chewie/src/helpers/utils.dart';
 import 'package:chewie/src/material/material_progress_bar.dart';
+import 'package:chewie/src/material/widgets/audio_track_dialog.dart';
 import 'package:chewie/src/material/widgets/options_dialog.dart';
 import 'package:chewie/src/material/widgets/playback_speed_dialog.dart';
 import 'package:chewie/src/material/widgets/subtitle_track_dialog.dart';
+import 'package:chewie/src/models/audio_track.dart';
 import 'package:chewie/src/models/option_item.dart';
 import 'package:chewie/src/models/subtitle_model.dart';
 import 'package:chewie/src/models/subtitle_track.dart';
@@ -190,6 +192,15 @@ class _MaterialDesktopControlsState extends State<MaterialDesktopControls>
           title:
               chewieController.optionsTranslation?.subtitlesButtonText ??
               'Subtitles',
+        ),
+      if (chewieController.hasAudioTracks)
+        OptionItem(
+          onTap: (context) async {
+            Navigator.pop(context);
+            await _onAudioTrackButtonTap();
+          },
+          iconData: Icons.audiotrack_outlined,
+          title: 'Audio',
         ),
     ];
 
@@ -528,6 +539,28 @@ class _MaterialDesktopControlsState extends State<MaterialDesktopControls>
     if (choice != null) {
       chewieController.selectSubtitleTrack(choice.track);
       setState(() => _subtitleOn = choice.track != null);
+    }
+
+    if (_latestValue.isPlaying) {
+      _startHideTimer();
+    }
+  }
+
+  Future<void> _onAudioTrackButtonTap() async {
+    _hideTimer?.cancel();
+
+    final track = await showModalBottomSheet<AudioTrack>(
+      context: context,
+      isScrollControlled: true,
+      useRootNavigator: chewieController.useRootNavigator,
+      builder: (context) => AudioTrackDialog(
+        tracks: chewieController.audioTracks,
+        selectedId: chewieController.activeAudioTrackId,
+      ),
+    );
+
+    if (track != null) {
+      chewieController.selectAudioTrack(track);
     }
 
     if (_latestValue.isPlaying) {
