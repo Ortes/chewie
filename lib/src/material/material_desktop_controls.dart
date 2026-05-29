@@ -8,8 +8,10 @@ import 'package:chewie/src/helpers/utils.dart';
 import 'package:chewie/src/material/material_progress_bar.dart';
 import 'package:chewie/src/material/widgets/options_dialog.dart';
 import 'package:chewie/src/material/widgets/playback_speed_dialog.dart';
+import 'package:chewie/src/material/widgets/subtitle_track_dialog.dart';
 import 'package:chewie/src/models/option_item.dart';
 import 'package:chewie/src/models/subtitle_model.dart';
+import 'package:chewie/src/models/subtitle_track.dart';
 import 'package:chewie/src/notifiers/index.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -112,17 +114,13 @@ class _MaterialDesktopControlsState extends State<MaterialDesktopControls>
                 Column(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: <Widget>[
-                    if (_subtitleOn)
-                      Transform.translate(
-                        offset: Offset(
-                          0.0,
-                          notifier.hideStuff ? barHeight * 0.8 : 0.0,
-                        ),
-                        child: _buildSubtitles(
-                          context,
-                          chewieController.subtitle!,
-                        ),
+                    Transform.translate(
+                      offset: Offset(
+                        0.0,
+                        notifier.hideStuff ? barHeight * 0.8 : 0.0,
                       ),
+                      child: _buildSubtitleLayer(context),
+                    ),
                     _buildBottomBar(context),
                   ],
                 ),
@@ -182,6 +180,17 @@ class _MaterialDesktopControlsState extends State<MaterialDesktopControls>
             chewieController.optionsTranslation?.playbackSpeedButtonText ??
             'Playback speed',
       ),
+      if (chewieController.hasSubtitleTracks)
+        OptionItem(
+          onTap: (context) async {
+            Navigator.pop(context);
+            await _onSubtitleTrackButtonTap();
+          },
+          iconData: Icons.subtitles_outlined,
+          title:
+              chewieController.optionsTranslation?.subtitlesButtonText ??
+              'Subtitles',
+        ),
     ];
 
     if (chewieController.additionalOptions != null &&
@@ -221,6 +230,27 @@ class _MaterialDesktopControlsState extends State<MaterialDesktopControls>
     );
   }
 
+  /// Picks the right subtitle source: a streaming [ChewieController.liveSubtitle]
+  /// (for sources like HLS that emit cues over time) when present, otherwise
+  /// the static [ChewieController.subtitle] cue list.
+  Widget _buildSubtitleLayer(BuildContext context) {
+    if (!_subtitleOn) return const SizedBox();
+
+    final usesLiveCues =
+        chewieController.hasSubtitleTracks || chewieController.subtitle == null;
+    if (usesLiveCues) {
+      return ValueListenableBuilder<String?>(
+        valueListenable: chewieController.liveSubtitle,
+        builder: (context, text, _) {
+          if (text == null || text.isEmpty) return const SizedBox();
+          return _subtitleBox(context, text);
+        },
+      );
+    }
+
+    return _buildSubtitles(context, chewieController.subtitle!);
+  }
+
   Widget _buildSubtitles(BuildContext context, Subtitles subtitles) {
     if (!_subtitleOn) {
       return const SizedBox();
@@ -230,11 +260,12 @@ class _MaterialDesktopControlsState extends State<MaterialDesktopControls>
       return const SizedBox();
     }
 
+    return _subtitleBox(context, currentSubtitle.first!.text);
+  }
+
+  Widget _subtitleBox(BuildContext context, dynamic text) {
     if (chewieController.subtitleBuilder != null) {
-      return chewieController.subtitleBuilder!(
-        context,
-        currentSubtitle.first!.text,
-      );
+      return chewieController.subtitleBuilder!(context, text);
     }
 
     return Padding(
@@ -246,7 +277,7 @@ class _MaterialDesktopControlsState extends State<MaterialDesktopControls>
           borderRadius: BorderRadius.circular(10.0),
         ),
         child: Text(
-          currentSubtitle.first!.text.toString(),
+          text.toString(),
           style: const TextStyle(fontSize: 18),
           textAlign: TextAlign.center,
         ),
@@ -284,8 +315,8 @@ class _MaterialDesktopControlsState extends State<MaterialDesktopControls>
                       _buildPosition(iconColor),
                     const Spacer(),
                     if (chewieController.showControls &&
-                        chewieController.subtitle != null &&
-                        chewieController.subtitle!.isNotEmpty)
+                        ((chewieController.subtitle?.isNotEmpty ?? false) ||
+                            chewieController.hasSubtitleTracks))
                       _buildSubtitleToggle(icon: Icons.subtitles),
                     if (chewieController.showOptions)
                       _buildOptionsButton(icon: Icons.settings),
@@ -453,9 +484,55 @@ class _MaterialDesktopControlsState extends State<MaterialDesktopControls>
   }
 
   void _onSubtitleTap() {
+    final controller = chewieController;
+    // With selectable tracks, toggling also drives the track selection so the
+    // host can start/stop producing cues.
+    if (controller.hasSubtitleTracks) {
+      if (_subtitleOn) {
+        controller.selectSubtitleTrack(null);
+        setState(() => _subtitleOn = false);
+      } else {
+        controller.selectSubtitleTrack(_activeTrackOrDefault());
+        setState(() => _subtitleOn = true);
+      }
+      return;
+    }
     setState(() {
       _subtitleOn = !_subtitleOn;
     });
+  }
+
+  SubtitleTrack? _activeTrackOrDefault() {
+    final tracks = chewieController.subtitleTracks;
+    if (tracks.isEmpty) return null;
+    final activeId = chewieController.activeSubtitleTrackId;
+    for (final track in tracks) {
+      if (track.id == activeId) return track;
+    }
+    return tracks.first;
+  }
+
+  Future<void> _onSubtitleTrackButtonTap() async {
+    _hideTimer?.cancel();
+
+    final choice = await showModalBottomSheet<SubtitleTrackChoice>(
+      context: context,
+      isScrollControlled: true,
+      useRootNavigator: chewieController.useRootNavigator,
+      builder: (context) => SubtitleTrackDialog(
+        tracks: chewieController.subtitleTracks,
+        selectedId: chewieController.activeSubtitleTrackId,
+      ),
+    );
+
+    if (choice != null) {
+      chewieController.selectSubtitleTrack(choice.track);
+      setState(() => _subtitleOn = choice.track != null);
+    }
+
+    if (_latestValue.isPlaying) {
+      _startHideTimer();
+    }
   }
 
   void _cancelAndRestartTimer() {
@@ -470,8 +547,9 @@ class _MaterialDesktopControlsState extends State<MaterialDesktopControls>
 
   Future<void> _initialize() async {
     _subtitleOn =
-        chewieController.showSubtitles &&
-        (chewieController.subtitle?.isNotEmpty ?? false);
+        (chewieController.showSubtitles &&
+            (chewieController.subtitle?.isNotEmpty ?? false)) ||
+        chewieController.activeSubtitleTrackId != null;
     controller.addListener(_updateState);
 
     _updateState();
