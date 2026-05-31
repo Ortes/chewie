@@ -2,8 +2,7 @@ import 'dart:async';
 
 import 'package:chewie/src/chewie_progress_colors.dart';
 import 'package:chewie/src/models/audio_track.dart';
-// ignore: uri_does_not_exist
-import 'web_fullscreen_stub.dart' if (dart.library.html) 'web_fullscreen.dart';
+import 'web_fullscreen.dart';
 import 'package:chewie/src/models/option_item.dart';
 import 'package:chewie/src/models/options_translation.dart';
 import 'package:chewie/src/models/subtitle_model.dart';
