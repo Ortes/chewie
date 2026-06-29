@@ -326,10 +326,10 @@ class ChewieController extends ChangeNotifier {
     this.showSubtitles = false,
     this.subtitleBuilder,
     this.subtitleTracks = const <SubtitleTrack>[],
-    this.activeSubtitleTrackId,
+    String? activeSubtitleTrackId,
     this.onSubtitleTrackChanged,
     this.audioTracks = const <AudioTrack>[],
-    this.activeAudioTrackId,
+    String? activeAudioTrackId,
     this.onAudioTrackChanged,
     this.customControls,
     this.errorBuilder,
@@ -355,7 +355,9 @@ class ChewieController extends ChangeNotifier {
     this.allowDoubleTapToggleFullScreen = true,
     this.swipeToExitFullscreen = true,
     this.swipeThreshold = 300,
-  }) : assert(playbackSpeeds.every((speed) => speed > 0), 'The playbackSpeeds values must all be greater than 0') {
+  })  : _activeAudioTrackId = activeAudioTrackId,
+        _activeSubtitleTrackId = activeSubtitleTrackId,
+        assert(playbackSpeeds.every((speed) => speed > 0), 'The playbackSpeeds values must all be greater than 0') {
     _initialize();
   }
 
@@ -387,11 +389,11 @@ class ChewieController extends ChangeNotifier {
     bool? showSubtitles,
     Widget Function(BuildContext, dynamic)? subtitleBuilder,
     List<SubtitleTrack>? subtitleTracks,
-    Object? activeSubtitleTrackId,
-    void Function(SubtitleTrack? track)? onSubtitleTrackChanged,
+    String? activeSubtitleTrackId,
+    FutureOr<void> Function(SubtitleTrack? track)? onSubtitleTrackChanged,
     List<AudioTrack>? audioTracks,
-    Object? activeAudioTrackId,
-    void Function(AudioTrack track)? onAudioTrackChanged,
+    String? activeAudioTrackId,
+    FutureOr<void> Function(AudioTrack track)? onAudioTrackChanged,
     Widget? customControls,
     WidgetBuilder? bufferingBuilder,
     Widget Function(BuildContext, String)? errorBuilder,
@@ -525,12 +527,24 @@ class ChewieController extends ChangeNotifier {
   /// video loads — use [setSubtitleTracks] so the controls rebuild.
   List<SubtitleTrack> subtitleTracks;
 
+  String? _activeSubtitleTrackId;
+
   /// Id of the currently selected track in [subtitleTracks], or `null` when
   /// subtitles are off.
-  Object? activeSubtitleTrackId;
+  ///
+  /// Read-only on purpose: the player owns this value so the CC toggle and the
+  /// menu check mark stay in sync. Set the initial selection with
+  /// [setSubtitleTracks] and change it through [selectSubtitleTrack]; both
+  /// notify listeners.
+  String? get activeSubtitleTrackId => _activeSubtitleTrackId;
 
-  /// Called when the user picks a track from the menu (or `null` for "Off").
-  final void Function(SubtitleTrack? track)? onSubtitleTrackChanged;
+  /// Performs the actual track switch when the user picks a track (or `null`
+  /// for "Off").
+  ///
+  /// May return a [Future]; [selectSubtitleTrack] awaits it. If it throws, the
+  /// selection is rolled back and the error is rethrown rather than silently
+  /// swallowed.
+  final FutureOr<void> Function(SubtitleTrack? track)? onSubtitleTrackChanged;
 
   /// The text of the cue currently on screen, for streaming sources that emit
   /// cues over time (e.g. HLS) rather than as a static [subtitle] list. Push
@@ -548,11 +562,23 @@ class ChewieController extends ChangeNotifier {
   /// audio is never "off": one track is always active.
   List<AudioTrack> audioTracks;
 
-  /// Id of the currently selected track in [audioTracks].
-  Object? activeAudioTrackId;
+  String? _activeAudioTrackId;
 
-  /// Called when the user picks an audio track from the menu.
-  final void Function(AudioTrack track)? onAudioTrackChanged;
+  /// Id of the currently selected track in [audioTracks], or `null` before one
+  /// is chosen.
+  ///
+  /// Read-only on purpose: the player owns this value so the menu's check mark
+  /// stays in sync. Set the initial selection with [setAudioTracks] and change
+  /// it through [selectAudioTrack]; both notify listeners.
+  String? get activeAudioTrackId => _activeAudioTrackId;
+
+  /// Performs the actual rendition switch when the user picks a track.
+  ///
+  /// May return a [Future]; [selectAudioTrack] awaits it, so the host can keep
+  /// it pending until the switch settles (sources typically rebuffer). If it
+  /// throws, the selection is rolled back and the error is rethrown rather than
+  /// silently swallowed.
+  final FutureOr<void> Function(AudioTrack track)? onAudioTrackChanged;
 
   /// Whether more than one selectable audio track is available (a single track
   /// offers nothing to choose, so the menu entry stays hidden).
@@ -806,22 +832,40 @@ class ChewieController extends ChangeNotifier {
   /// Replaces the selectable [subtitleTracks] and rebuilds the controls.
   ///
   /// Use when tracks become known only after the media loads (e.g. once an
-  /// HLS manifest is parsed).
-  void setSubtitleTracks(List<SubtitleTrack> tracks) {
+  /// HLS manifest is parsed). Pass [activeId] to set the initially selected
+  /// track without triggering [onSubtitleTrackChanged] (the host has already
+  /// loaded it); leave it null to start with subtitles off.
+  void setSubtitleTracks(List<SubtitleTrack> tracks, {String? activeId}) {
     subtitleTracks = tracks;
+    if (activeId != null) _activeSubtitleTrackId = activeId;
     notifyListeners();
   }
 
-  /// Selects [track] (or `null` to turn subtitles off), updating
-  /// [activeSubtitleTrackId], notifying [onSubtitleTrackChanged] and clearing
-  /// any on-screen [liveSubtitle] when turned off.
-  void selectSubtitleTrack(SubtitleTrack? track) {
-    activeSubtitleTrackId = track?.id;
+  /// Selects [track] (or `null` to turn subtitles off).
+  ///
+  /// Updates [activeSubtitleTrackId] optimistically (so the menu's check mark
+  /// and the CC toggle move immediately) and clears any on-screen
+  /// [liveSubtitle] when turned off, then awaits [onSubtitleTrackChanged] to
+  /// perform the actual switch. If that callback throws, the selection is
+  /// rolled back to the previous track and the error is rethrown.
+  Future<void> selectSubtitleTrack(SubtitleTrack? track) async {
+    if (track?.id == _activeSubtitleTrackId) return;
+    final previousId = _activeSubtitleTrackId;
+    _activeSubtitleTrackId = track?.id;
     if (track == null) {
       liveSubtitle.value = null;
     }
-    onSubtitleTrackChanged?.call(track);
     notifyListeners();
+
+    final callback = onSubtitleTrackChanged;
+    if (callback == null) return;
+    try {
+      await callback(track);
+    } catch (_) {
+      _activeSubtitleTrackId = previousId;
+      notifyListeners();
+      rethrow;
+    }
   }
 
   /// Pushes the current cue text for streaming subtitle sources. Pass `null`
@@ -833,18 +877,36 @@ class ChewieController extends ChangeNotifier {
   /// Replaces the selectable [audioTracks] and rebuilds the controls.
   ///
   /// Use when tracks become known only after the media loads (e.g. once an
-  /// HLS manifest is parsed).
-  void setAudioTracks(List<AudioTrack> tracks) {
+  /// HLS manifest is parsed). Pass [activeId] to set the initially selected
+  /// track without triggering [onAudioTrackChanged] (the host has already
+  /// loaded that rendition).
+  void setAudioTracks(List<AudioTrack> tracks, {String? activeId}) {
     audioTracks = tracks;
+    if (activeId != null) _activeAudioTrackId = activeId;
     notifyListeners();
   }
 
-  /// Selects [track] as the active audio rendition, updating
-  /// [activeAudioTrackId] and notifying [onAudioTrackChanged].
-  void selectAudioTrack(AudioTrack track) {
-    activeAudioTrackId = track.id;
-    onAudioTrackChanged?.call(track);
+  /// Selects [track] as the active audio rendition.
+  ///
+  /// Updates [activeAudioTrackId] optimistically (so the menu's check mark
+  /// moves immediately), then awaits [onAudioTrackChanged] to perform the
+  /// actual switch. If that callback throws, the selection is rolled back to
+  /// the previous track and the error is rethrown.
+  Future<void> selectAudioTrack(AudioTrack track) async {
+    if (track.id == _activeAudioTrackId) return;
+    final previousId = _activeAudioTrackId;
+    _activeAudioTrackId = track.id;
     notifyListeners();
+
+    final callback = onAudioTrackChanged;
+    if (callback == null) return;
+    try {
+      await callback(track);
+    } catch (_) {
+      _activeAudioTrackId = previousId;
+      notifyListeners();
+      rethrow;
+    }
   }
 
   @override

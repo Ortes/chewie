@@ -9,8 +9,12 @@ import 'package:chewie/src/chewie_progress_colors.dart';
 import 'package:chewie/src/cupertino/cupertino_progress_bar.dart';
 import 'package:chewie/src/cupertino/widgets/cupertino_options_dialog.dart';
 import 'package:chewie/src/helpers/utils.dart';
+import 'package:chewie/src/material/widgets/subtitle_track_dialog.dart'
+    show SubtitleTrackChoice;
+import 'package:chewie/src/models/audio_track.dart';
 import 'package:chewie/src/models/option_item.dart';
 import 'package:chewie/src/models/subtitle_model.dart';
+import 'package:chewie/src/models/subtitle_track.dart';
 import 'package:chewie/src/notifiers/index.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -46,7 +50,12 @@ class _CupertinoControlsState extends State<CupertinoControls>
   Timer? _initTimer;
   bool _dragging = false;
   Duration? _subtitlesPosition;
+  // Only governs the static-subtitle path (no selectable tracks). For the
+  // track path, visibility is derived from [activeSubtitleTrackId].
   bool _subtitleOn = false;
+  // Last non-null track id, so toggling subtitles back on restores the user's
+  // previous pick rather than jumping to the first track.
+  String? _lastSubtitleId;
   Timer? _bufferingDisplayTimer;
   bool _displayBufferingIndicator = false;
   double selectedSpeed = 1.0;
@@ -108,13 +117,13 @@ class _CupertinoControlsState extends State<CupertinoControls>
                     buttonPadding,
                   ),
                   const Spacer(),
-                  if (_subtitleOn)
+                  if (_subtitlesVisible)
                     Transform.translate(
                       offset: Offset(
                         0.0,
                         notifier.hideStuff ? barHeight * 0.8 : 0.0,
                       ),
-                      child: _buildSubtitles(chewieController.subtitle!),
+                      child: _buildSubtitleLayer(),
                     ),
                   _buildBottomBar(backgroundColor, iconColor, barHeight),
                 ],
@@ -161,6 +170,33 @@ class _CupertinoControlsState extends State<CupertinoControls>
       options.addAll(chewieController.additionalOptions!(context));
     }
 
+    if (chewieController.hasSubtitleTracks) {
+      options.add(
+        OptionItem(
+          onTap: (_) async {
+            Navigator.pop(context);
+            await _onSubtitleTrackTap();
+          },
+          iconData: Icons.subtitles_outlined,
+          title: chewieController.optionsTranslation?.subtitlesButtonText ??
+              'Subtitles',
+        ),
+      );
+    }
+
+    if (chewieController.hasAudioTracks) {
+      options.add(
+        OptionItem(
+          onTap: (_) async {
+            Navigator.pop(context);
+            await _onAudioTrackTap();
+          },
+          iconData: Icons.audiotrack_outlined,
+          title: chewieController.optionsTranslation?.audioButtonText ?? 'Audio',
+        ),
+      );
+    }
+
     return GestureDetector(
       onTap: () async {
         _hideTimer?.cancel();
@@ -193,10 +229,32 @@ class _CupertinoControlsState extends State<CupertinoControls>
     );
   }
 
-  Widget _buildSubtitles(Subtitles subtitles) {
-    if (!_subtitleOn) {
-      return const SizedBox();
+  /// Whether subtitles are currently shown. For selectable tracks this is the
+  /// single source of truth ([activeSubtitleTrackId] != null); for a static cue
+  /// list it falls back to the local [_subtitleOn] toggle.
+  bool get _subtitlesVisible => chewieController.hasSubtitleTracks
+      ? chewieController.activeSubtitleTrackId != null
+      : _subtitleOn;
+
+  /// Renders streaming cues pushed via [ChewieController.setLiveSubtitle] when
+  /// selectable tracks (or no static list) are in play, otherwise the static
+  /// cue list.
+  Widget _buildSubtitleLayer() {
+    final usesLiveCues =
+        chewieController.hasSubtitleTracks || chewieController.subtitle == null;
+    if (usesLiveCues) {
+      return ValueListenableBuilder<String?>(
+        valueListenable: chewieController.liveSubtitle,
+        builder: (context, text, _) {
+          if (text == null || text.isEmpty) return const SizedBox();
+          return _subtitleBox(text);
+        },
+      );
     }
+    return _buildSubtitles(chewieController.subtitle!);
+  }
+
+  Widget _buildSubtitles(Subtitles subtitles) {
     if (_subtitlesPosition == null) {
       return const SizedBox();
     }
@@ -204,12 +262,12 @@ class _CupertinoControlsState extends State<CupertinoControls>
     if (currentSubtitle.isEmpty) {
       return const SizedBox();
     }
+    return _subtitleBox(currentSubtitle.first!.text);
+  }
 
+  Widget _subtitleBox(Object text) {
     if (chewieController.subtitleBuilder != null) {
-      return chewieController.subtitleBuilder!(
-        context,
-        currentSubtitle.first!.text,
-      );
+      return chewieController.subtitleBuilder!(context, text);
     }
 
     return Padding(
@@ -221,7 +279,7 @@ class _CupertinoControlsState extends State<CupertinoControls>
           borderRadius: BorderRadius.circular(10.0),
         ),
         child: Text(
-          currentSubtitle.first!.text.toString(),
+          text.toString(),
           style: const TextStyle(fontSize: 18),
           textAlign: TextAlign.center,
         ),
@@ -456,8 +514,10 @@ class _CupertinoControlsState extends State<CupertinoControls>
   }
 
   Widget _buildSubtitleToggle(Color iconColor, double barHeight) {
-    //if don't have subtitle hiden button
-    if (chewieController.subtitle?.isEmpty ?? true) {
+    // Hide the button when there's nothing to toggle: neither a static cue list
+    // nor selectable tracks.
+    final hasStaticSubtitle = chewieController.subtitle?.isNotEmpty ?? false;
+    if (!hasStaticSubtitle && !chewieController.hasSubtitleTracks) {
       return const SizedBox();
     }
     return GestureDetector(
@@ -469,7 +529,7 @@ class _CupertinoControlsState extends State<CupertinoControls>
         padding: const EdgeInsets.only(left: 6.0, right: 6.0),
         child: Icon(
           Icons.subtitles,
-          color: _subtitleOn ? iconColor : Colors.grey[700],
+          color: _subtitlesVisible ? iconColor : Colors.grey[700],
           size: 16.0,
         ),
       ),
@@ -477,9 +537,65 @@ class _CupertinoControlsState extends State<CupertinoControls>
   }
 
   void _subtitleToggle() {
+    final controller = chewieController;
+    // With selectable tracks, toggling drives the track selection so the host
+    // can start/stop producing cues; visibility is derived from the active id.
+    if (controller.hasSubtitleTracks) {
+      if (controller.activeSubtitleTrackId != null) {
+        controller.selectSubtitleTrack(null);
+      } else {
+        final track = _trackToRestore();
+        _lastSubtitleId = track.id;
+        controller.selectSubtitleTrack(track);
+      }
+      setState(() {});
+      return;
+    }
     setState(() {
       _subtitleOn = !_subtitleOn;
     });
+  }
+
+  /// The track to (re)activate when the toggle turns subtitles back on: the
+  /// last one the user picked, else the source default, else the first.
+  SubtitleTrack _trackToRestore() {
+    final tracks = chewieController.subtitleTracks;
+    return tracks.firstWhere(
+      (t) => t.id == _lastSubtitleId,
+      orElse: () => tracks.firstWhere(
+        (t) => t.isDefault,
+        orElse: () => tracks.first,
+      ),
+    );
+  }
+
+  Future<void> _onSubtitleTrackTap() async {
+    _hideTimer?.cancel();
+
+    final offLabel =
+        chewieController.optionsTranslation?.subtitlesButtonText != null
+            ? '${chewieController.optionsTranslation!.subtitlesButtonText} — off'
+            : 'Off';
+    final choice = await showCupertinoModalPopup<SubtitleTrackChoice>(
+      context: context,
+      semanticsDismissible: true,
+      useRootNavigator: chewieController.useRootNavigator,
+      builder: (context) => _SubtitleTrackDialog(
+        tracks: chewieController.subtitleTracks,
+        selectedId: chewieController.activeSubtitleTrackId,
+        offLabel: offLabel,
+      ),
+    );
+
+    if (choice != null) {
+      if (choice.track != null) _lastSubtitleId = choice.track!.id;
+      await chewieController.selectSubtitleTrack(choice.track);
+      if (mounted) setState(() {});
+    }
+
+    if (_latestValue.isPlaying) {
+      _startHideTimer();
+    }
   }
 
   GestureDetector _buildSkipBack(Color iconColor, double barHeight) {
@@ -506,6 +622,28 @@ class _CupertinoControlsState extends State<CupertinoControls>
         child: Icon(CupertinoIcons.goforward_15, color: iconColor, size: 18.0),
       ),
     );
+  }
+
+  Future<void> _onAudioTrackTap() async {
+    _hideTimer?.cancel();
+
+    final track = await showCupertinoModalPopup<AudioTrack>(
+      context: context,
+      semanticsDismissible: true,
+      useRootNavigator: chewieController.useRootNavigator,
+      builder: (context) => _AudioTrackDialog(
+        tracks: chewieController.audioTracks,
+        selectedId: chewieController.activeAudioTrackId,
+      ),
+    );
+
+    if (track != null) {
+      await chewieController.selectAudioTrack(track);
+    }
+
+    if (_latestValue.isPlaying) {
+      _startHideTimer();
+    }
   }
 
   GestureDetector _buildSpeedButton(
@@ -603,6 +741,8 @@ class _CupertinoControlsState extends State<CupertinoControls>
     _subtitleOn =
         chewieController.showSubtitles &&
         (chewieController.subtitle?.isNotEmpty ?? false);
+    // Seed the "restore on toggle" id with whatever starts active.
+    _lastSubtitleId = chewieController.activeSubtitleTrackId;
     controller.addListener(_updateState);
 
     _updateState();
@@ -801,6 +941,90 @@ class _PlaybackSpeedDialog extends StatelessWidget {
             ),
           )
           .toList(),
+    );
+  }
+}
+
+class _AudioTrackDialog extends StatelessWidget {
+  const _AudioTrackDialog({
+    required List<AudioTrack> tracks,
+    required String? selectedId,
+  })  : _tracks = tracks,
+        _selectedId = selectedId;
+
+  final List<AudioTrack> _tracks;
+  final String? _selectedId;
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedColor = CupertinoTheme.of(context).primaryColor;
+
+    return CupertinoActionSheet(
+      actions: _tracks
+          .map(
+            (track) => CupertinoActionSheetAction(
+              onPressed: () => Navigator.of(context).pop(track),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (track.id == _selectedId)
+                    Icon(Icons.check, size: 20.0, color: selectedColor),
+                  const SizedBox(width: 8.0),
+                  Flexible(child: Text(track.displayLabel)),
+                ],
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
+class _SubtitleTrackDialog extends StatelessWidget {
+  const _SubtitleTrackDialog({
+    required List<SubtitleTrack> tracks,
+    required String? selectedId,
+    this.offLabel = 'Off',
+  })  : _tracks = tracks,
+        _selectedId = selectedId;
+
+  final List<SubtitleTrack> _tracks;
+  final String? _selectedId;
+  final String offLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedColor = CupertinoTheme.of(context).primaryColor;
+
+    Widget action({
+      required bool selected,
+      required String label,
+      required SubtitleTrack? track,
+    }) {
+      return CupertinoActionSheetAction(
+        onPressed: () => Navigator.of(context).pop(SubtitleTrackChoice(track)),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (selected)
+              Icon(Icons.check, size: 20.0, color: selectedColor),
+            const SizedBox(width: 8.0),
+            Flexible(child: Text(label)),
+          ],
+        ),
+      );
+    }
+
+    return CupertinoActionSheet(
+      actions: [
+        action(selected: _selectedId == null, label: offLabel, track: null),
+        for (final track in _tracks)
+          action(
+            selected: track.id == _selectedId,
+            label: track.displayLabel,
+            track: track,
+          ),
+      ],
     );
   }
 }

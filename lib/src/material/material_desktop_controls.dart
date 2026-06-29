@@ -10,7 +10,6 @@ import 'package:chewie/src/material/widgets/audio_track_dialog.dart';
 import 'package:chewie/src/material/widgets/options_dialog.dart';
 import 'package:chewie/src/material/widgets/playback_speed_dialog.dart';
 import 'package:chewie/src/material/widgets/subtitle_track_dialog.dart';
-import 'package:chewie/src/models/audio_track.dart';
 import 'package:chewie/src/models/option_item.dart';
 import 'package:chewie/src/models/subtitle_model.dart';
 import 'package:chewie/src/models/subtitle_track.dart';
@@ -39,7 +38,13 @@ class _MaterialDesktopControlsState extends State<MaterialDesktopControls>
   Timer? _hideTimer;
   Timer? _initTimer;
   late var _subtitlesPosition = Duration.zero;
+  // Only governs the static-subtitle path (no selectable tracks). For the
+  // track path, visibility is derived from [activeSubtitleTrackId] so the CC
+  // toggle and the menu check mark can never contradict each other.
   bool _subtitleOn = false;
+  // Last non-null track id, so toggling the CC button back on restores the
+  // user's previous pick rather than jumping to the first track.
+  String? _lastSubtitleId;
   Timer? _showAfterExpandCollapseTimer;
   bool _dragging = false;
   bool _displayTapped = false;
@@ -165,7 +170,8 @@ class _MaterialDesktopControlsState extends State<MaterialDesktopControls>
   Widget _buildSubtitleToggle({IconData? icon, bool isPadded = false}) {
     return IconButton(
       padding: isPadded ? const EdgeInsets.all(8.0) : EdgeInsets.zero,
-      icon: Icon(icon, color: _subtitleOn ? Colors.white : Colors.grey[700]),
+      icon: Icon(icon,
+          color: _subtitlesVisible ? Colors.white : Colors.grey[700]),
       onPressed: _onSubtitleTap,
     );
   }
@@ -200,7 +206,7 @@ class _MaterialDesktopControlsState extends State<MaterialDesktopControls>
             await _onAudioTrackButtonTap();
           },
           iconData: Icons.audiotrack_outlined,
-          title: 'Audio',
+          title: chewieController.optionsTranslation?.audioButtonText ?? 'Audio',
         ),
     ];
 
@@ -244,8 +250,15 @@ class _MaterialDesktopControlsState extends State<MaterialDesktopControls>
   /// Picks the right subtitle source: a streaming [ChewieController.liveSubtitle]
   /// (for sources like HLS that emit cues over time) when present, otherwise
   /// the static [ChewieController.subtitle] cue list.
+  /// Whether subtitles are currently shown. For selectable tracks this is the
+  /// single source of truth ([activeSubtitleTrackId] != null); for a static
+  /// cue list it falls back to the local [_subtitleOn] toggle.
+  bool get _subtitlesVisible => chewieController.hasSubtitleTracks
+      ? chewieController.activeSubtitleTrackId != null
+      : _subtitleOn;
+
   Widget _buildSubtitleLayer(BuildContext context) {
-    if (!_subtitleOn) return const SizedBox();
+    if (!_subtitlesVisible) return const SizedBox();
 
     final usesLiveCues =
         chewieController.hasSubtitleTracks || chewieController.subtitle == null;
@@ -263,7 +276,7 @@ class _MaterialDesktopControlsState extends State<MaterialDesktopControls>
   }
 
   Widget _buildSubtitles(BuildContext context, Subtitles subtitles) {
-    if (!_subtitleOn) {
+    if (!_subtitlesVisible) {
       return const SizedBox();
     }
     final currentSubtitle = subtitles.getByPosition(_subtitlesPosition);
@@ -505,16 +518,18 @@ class _MaterialDesktopControlsState extends State<MaterialDesktopControls>
 
   void _onSubtitleTap() {
     final controller = chewieController;
-    // With selectable tracks, toggling also drives the track selection so the
-    // host can start/stop producing cues.
+    // With selectable tracks, toggling drives the track selection so the host
+    // can start/stop producing cues. Visibility is derived from the active id,
+    // so no local flag to flip — just request the switch and rebuild.
     if (controller.hasSubtitleTracks) {
-      if (_subtitleOn) {
+      if (controller.activeSubtitleTrackId != null) {
         controller.selectSubtitleTrack(null);
-        setState(() => _subtitleOn = false);
       } else {
-        controller.selectSubtitleTrack(_activeTrackOrDefault());
-        setState(() => _subtitleOn = true);
+        final track = _trackToRestore();
+        _lastSubtitleId = track.id;
+        controller.selectSubtitleTrack(track);
       }
+      setState(() {});
       return;
     }
     setState(() {
@@ -522,32 +537,27 @@ class _MaterialDesktopControlsState extends State<MaterialDesktopControls>
     });
   }
 
-  SubtitleTrack? _activeTrackOrDefault() {
+  /// The track to (re)activate when the CC toggle turns subtitles back on:
+  /// the last one the user picked, else the source default, else the first.
+  SubtitleTrack _trackToRestore() {
     final tracks = chewieController.subtitleTracks;
-    if (tracks.isEmpty) return null;
-    final activeId = chewieController.activeSubtitleTrackId;
-    for (final track in tracks) {
-      if (track.id == activeId) return track;
-    }
-    return tracks.first;
+    return tracks.firstWhere(
+      (t) => t.id == _lastSubtitleId,
+      orElse: () => tracks.firstWhere(
+        (t) => t.isDefault,
+        orElse: () => tracks.first,
+      ),
+    );
   }
 
   Future<void> _onSubtitleTrackButtonTap() async {
     _hideTimer?.cancel();
 
-    final choice = await showModalBottomSheet<SubtitleTrackChoice>(
-      context: context,
-      isScrollControlled: true,
-      useRootNavigator: chewieController.useRootNavigator,
-      builder: (context) => SubtitleTrackDialog(
-        tracks: chewieController.subtitleTracks,
-        selectedId: chewieController.activeSubtitleTrackId,
-      ),
-    );
-
+    final choice = await showSubtitleTrackBottomSheet(context, chewieController);
     if (choice != null) {
-      chewieController.selectSubtitleTrack(choice.track);
-      setState(() => _subtitleOn = choice.track != null);
+      if (choice.track != null) _lastSubtitleId = choice.track!.id;
+      await chewieController.selectSubtitleTrack(choice.track);
+      if (mounted) setState(() {});
     }
 
     if (_latestValue.isPlaying) {
@@ -558,18 +568,9 @@ class _MaterialDesktopControlsState extends State<MaterialDesktopControls>
   Future<void> _onAudioTrackButtonTap() async {
     _hideTimer?.cancel();
 
-    final track = await showModalBottomSheet<AudioTrack>(
-      context: context,
-      isScrollControlled: true,
-      useRootNavigator: chewieController.useRootNavigator,
-      builder: (context) => AudioTrackDialog(
-        tracks: chewieController.audioTracks,
-        selectedId: chewieController.activeAudioTrackId,
-      ),
-    );
-
+    final track = await showAudioTrackBottomSheet(context, chewieController);
     if (track != null) {
-      chewieController.selectAudioTrack(track);
+      await chewieController.selectAudioTrack(track);
     }
 
     if (_latestValue.isPlaying) {
@@ -588,10 +589,11 @@ class _MaterialDesktopControlsState extends State<MaterialDesktopControls>
   }
 
   Future<void> _initialize() async {
-    _subtitleOn =
-        (chewieController.showSubtitles &&
-            (chewieController.subtitle?.isNotEmpty ?? false)) ||
-        chewieController.activeSubtitleTrackId != null;
+    // Static-subtitle visibility (the track path derives it from the active id).
+    _subtitleOn = chewieController.showSubtitles &&
+        (chewieController.subtitle?.isNotEmpty ?? false);
+    // Seed the "restore on toggle" id with whatever starts active.
+    _lastSubtitleId = chewieController.activeSubtitleTrackId;
     controller.addListener(_updateState);
 
     _updateState();
