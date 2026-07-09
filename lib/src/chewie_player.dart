@@ -356,6 +356,7 @@ class ChewieController extends ChangeNotifier {
     this.swipeToExitFullscreen = true,
     this.swipeThreshold = 300,
     this.showSeekIndicator = true,
+    this.keyboardSeekDuration = const Duration(seconds: 10),
   })  : _activeAudioTrackId = activeAudioTrackId,
         _activeSubtitleTrackId = activeSubtitleTrackId,
         assert(playbackSpeeds.every((speed) => speed > 0), 'The playbackSpeeds values must all be greater than 0') {
@@ -420,6 +421,7 @@ class ChewieController extends ChangeNotifier {
     bool? swipeToExitFullscreen,
     double? swipeThreshold,
     bool? showSeekIndicator,
+    Duration? keyboardSeekDuration,
   }) {
     return ChewieController(
       draggableProgressBar: draggableProgressBar ?? this.draggableProgressBar,
@@ -483,6 +485,7 @@ class ChewieController extends ChangeNotifier {
       swipeToExitFullscreen: swipeToExitFullscreen ?? this.swipeToExitFullscreen,
       swipeThreshold: swipeThreshold ?? this.swipeThreshold,
       showSeekIndicator: showSeekIndicator ?? this.showSeekIndicator,
+      keyboardSeekDuration: keyboardSeekDuration ?? this.keyboardSeekDuration,
     );
   }
 
@@ -749,6 +752,10 @@ class ChewieController extends ChangeNotifier {
   /// seeking with the keyboard arrows on desktop. Repeated presses in the same
   /// direction accumulate (e.g. 10s → 20s → 30s). Defaults to `true`.
   final bool showSeekIndicator;
+
+  /// How far each left/right arrow-key press seeks on the desktop controls.
+  /// Also drives the amount shown by the seek indicator. Defaults to 10 seconds.
+  final Duration keyboardSeekDuration;
 
   static ChewieController of(BuildContext context) {
     final chewieControllerProvider = context.dependOnInheritedWidgetOfExactType<ChewieControllerProvider>()!;

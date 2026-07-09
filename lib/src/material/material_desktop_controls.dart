@@ -53,7 +53,6 @@ class _MaterialDesktopControlsState extends State<MaterialDesktopControls>
   bool _displayBufferingIndicator = false;
 
   // YouTube-style keyboard seek indicator state.
-  static const Duration _seekStep = Duration(seconds: 10);
   Timer? _seekIndicatorTimer;
   bool _showSeekIndicator = false;
   bool _seekIndicatorForward = true;
@@ -712,12 +711,12 @@ class _MaterialDesktopControlsState extends State<MaterialDesktopControls>
   }
 
   void _seekBackward() {
-    _seekRelative(-_seekStep);
+    _seekRelative(-chewieController.keyboardSeekDuration);
     _bumpSeekIndicator(forward: false);
   }
 
   void _seekForward() {
-    _seekRelative(_seekStep);
+    _seekRelative(chewieController.keyboardSeekDuration);
     _bumpSeekIndicator(forward: true);
   }
 
@@ -727,12 +726,13 @@ class _MaterialDesktopControlsState extends State<MaterialDesktopControls>
   void _bumpSeekIndicator({required bool forward}) {
     if (!chewieController.showSeekIndicator) return;
 
+    final step = chewieController.keyboardSeekDuration.inSeconds;
     setState(() {
       if (_showSeekIndicator && _seekIndicatorForward == forward) {
-        _seekIndicatorSeconds += _seekStep.inSeconds;
+        _seekIndicatorSeconds += step;
       } else {
         _seekIndicatorForward = forward;
-        _seekIndicatorSeconds = _seekStep.inSeconds;
+        _seekIndicatorSeconds = step;
       }
       _showSeekIndicator = true;
     });
