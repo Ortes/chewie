@@ -367,6 +367,7 @@ class ChewieController extends ChangeNotifier {
     this.controlsSafeAreaMinimum = EdgeInsets.zero,
     this.pauseOnBackgroundTap = false,
     this.chapters = const [],
+    this.hideCursorInFullScreen = true,
   }) : assert(
          playbackSpeeds.every((speed) => speed > 0),
          'The playbackSpeeds values must all be greater than 0',
@@ -434,6 +435,7 @@ class ChewieController extends ChangeNotifier {
     routePageBuilder,
     bool? pauseOnBackgroundTap,
     List<ChewieChapter>? chapters,
+    bool? hideCursorInFullScreen,
   }) {
     return ChewieController(
       draggableProgressBar: draggableProgressBar ?? this.draggableProgressBar,
@@ -503,6 +505,8 @@ class ChewieController extends ChangeNotifier {
           progressIndicatorDelay ?? this.progressIndicatorDelay,
       pauseOnBackgroundTap: pauseOnBackgroundTap ?? this.pauseOnBackgroundTap,
       chapters: chapters ?? this.chapters,
+      hideCursorInFullScreen:
+          hideCursorInFullScreen ?? this.hideCursorInFullScreen,
     );
   }
 
@@ -713,6 +717,12 @@ class ChewieController extends ChangeNotifier {
     }
     return true;
   }
+
+  /// Whether the mouse cursor auto-hides together with the controls while in
+  /// fullscreen (and reappears on mouse movement), like most video players.
+  /// Has no effect outside fullscreen or on devices without a pointer.
+  /// Defaults to `true`.
+  final bool hideCursorInFullScreen;
 
   static ChewieController of(BuildContext context) {
     final chewieControllerProvider = context
