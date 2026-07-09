@@ -355,6 +355,7 @@ class ChewieController extends ChangeNotifier {
     this.allowDoubleTapToggleFullScreen = true,
     this.swipeToExitFullscreen = true,
     this.swipeThreshold = 300,
+    this.showSeekIndicator = true,
   })  : _activeAudioTrackId = activeAudioTrackId,
         _activeSubtitleTrackId = activeSubtitleTrackId,
         assert(playbackSpeeds.every((speed) => speed > 0), 'The playbackSpeeds values must all be greater than 0') {
@@ -418,6 +419,7 @@ class ChewieController extends ChangeNotifier {
     bool? allowDoubleTapToggleFullScreen,
     bool? swipeToExitFullscreen,
     double? swipeThreshold,
+    bool? showSeekIndicator,
   }) {
     return ChewieController(
       draggableProgressBar: draggableProgressBar ?? this.draggableProgressBar,
@@ -480,6 +482,7 @@ class ChewieController extends ChangeNotifier {
       allowDoubleTapToggleFullScreen: allowDoubleTapToggleFullScreen ?? this.allowDoubleTapToggleFullScreen,
       swipeToExitFullscreen: swipeToExitFullscreen ?? this.swipeToExitFullscreen,
       swipeThreshold: swipeThreshold ?? this.swipeThreshold,
+      showSeekIndicator: showSeekIndicator ?? this.showSeekIndicator,
     );
   }
 
@@ -741,6 +744,11 @@ class ChewieController extends ChangeNotifier {
   /// Defines the minimum velocity threshold for swipe to exit fullscreen gesture
   /// The velocity is measured in pixels per second
   final double swipeThreshold;
+
+  /// Whether to flash a YouTube-style indicator showing the seeked amount when
+  /// seeking with the keyboard arrows on desktop. Repeated presses in the same
+  /// direction accumulate (e.g. 10s → 20s → 30s). Defaults to `true`.
+  final bool showSeekIndicator;
 
   static ChewieController of(BuildContext context) {
     final chewieControllerProvider = context.dependOnInheritedWidgetOfExactType<ChewieControllerProvider>()!;
