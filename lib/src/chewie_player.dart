@@ -357,6 +357,7 @@ class ChewieController extends ChangeNotifier {
     this.swipeThreshold = 300,
     this.showSeekIndicator = true,
     this.keyboardSeekDuration = const Duration(seconds: 10),
+    this.hideCursorInFullScreen = true,
   })  : _activeAudioTrackId = activeAudioTrackId,
         _activeSubtitleTrackId = activeSubtitleTrackId,
         assert(playbackSpeeds.every((speed) => speed > 0), 'The playbackSpeeds values must all be greater than 0') {
@@ -422,6 +423,7 @@ class ChewieController extends ChangeNotifier {
     double? swipeThreshold,
     bool? showSeekIndicator,
     Duration? keyboardSeekDuration,
+    bool? hideCursorInFullScreen,
   }) {
     return ChewieController(
       draggableProgressBar: draggableProgressBar ?? this.draggableProgressBar,
@@ -486,6 +488,7 @@ class ChewieController extends ChangeNotifier {
       swipeThreshold: swipeThreshold ?? this.swipeThreshold,
       showSeekIndicator: showSeekIndicator ?? this.showSeekIndicator,
       keyboardSeekDuration: keyboardSeekDuration ?? this.keyboardSeekDuration,
+      hideCursorInFullScreen: hideCursorInFullScreen ?? this.hideCursorInFullScreen,
     );
   }
 
@@ -756,6 +759,12 @@ class ChewieController extends ChangeNotifier {
   /// How far each left/right arrow-key press seeks on the desktop controls.
   /// Also drives the amount shown by the seek indicator. Defaults to 10 seconds.
   final Duration keyboardSeekDuration;
+
+  /// Whether the mouse cursor auto-hides together with the controls while in
+  /// fullscreen (and reappears on mouse movement), like most video players.
+  /// Has no effect outside fullscreen or on devices without a pointer.
+  /// Defaults to `true`.
+  final bool hideCursorInFullScreen;
 
   static ChewieController of(BuildContext context) {
     final chewieControllerProvider = context.dependOnInheritedWidgetOfExactType<ChewieControllerProvider>()!;
