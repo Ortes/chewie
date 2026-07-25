@@ -16,6 +16,7 @@ import 'package:chewie/src/models/option_item.dart';
 import 'package:chewie/src/models/subtitle_model.dart';
 import 'package:chewie/src/models/subtitle_track.dart';
 import 'package:chewie/src/notifiers/index.dart';
+import 'package:chewie/src/subtitle_overlay.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -187,7 +188,8 @@ class _CupertinoControlsState extends State<CupertinoControls>
             await _onSubtitleTrackTap();
           },
           iconData: Icons.subtitles_outlined,
-          title: chewieController.optionsTranslation?.subtitlesButtonText ??
+          title:
+              chewieController.optionsTranslation?.subtitlesButtonText ??
               'Subtitles',
         ),
       );
@@ -201,7 +203,8 @@ class _CupertinoControlsState extends State<CupertinoControls>
             await _onAudioTrackTap();
           },
           iconData: Icons.audiotrack_outlined,
-          title: chewieController.optionsTranslation?.audioButtonText ?? 'Audio',
+          title:
+              chewieController.optionsTranslation?.audioButtonText ?? 'Audio',
         ),
       );
     }
@@ -275,24 +278,10 @@ class _CupertinoControlsState extends State<CupertinoControls>
   }
 
   Widget _subtitleBox(Object text) {
-    if (chewieController.subtitleBuilder != null) {
-      return chewieController.subtitleBuilder!(context, text);
-    }
-
-    return Padding(
-      padding: EdgeInsets.only(left: marginSize, right: marginSize),
-      child: Container(
-        padding: const EdgeInsets.all(5),
-        decoration: BoxDecoration(
-          color: const Color(0x96000000),
-          borderRadius: BorderRadius.circular(10.0),
-        ),
-        child: Text(
-          text.toString(),
-          style: const TextStyle(fontSize: 18),
-          textAlign: TextAlign.center,
-        ),
-      ),
+    return SubtitleOverlay(
+      chewieController: chewieController,
+      margin: EdgeInsets.only(left: marginSize, right: marginSize),
+      text: text,
     );
   }
 
@@ -571,10 +560,8 @@ class _CupertinoControlsState extends State<CupertinoControls>
     final tracks = chewieController.subtitleTracks;
     return tracks.firstWhere(
       (t) => t.id == _lastSubtitleId,
-      orElse: () => tracks.firstWhere(
-        (t) => t.isDefault,
-        orElse: () => tracks.first,
-      ),
+      orElse: () =>
+          tracks.firstWhere((t) => t.isDefault, orElse: () => tracks.first),
     );
   }
 
@@ -583,8 +570,8 @@ class _CupertinoControlsState extends State<CupertinoControls>
 
     final offLabel =
         chewieController.optionsTranslation?.subtitlesButtonText != null
-            ? '${chewieController.optionsTranslation!.subtitlesButtonText} — off'
-            : 'Off';
+        ? '${chewieController.optionsTranslation!.subtitlesButtonText} — off'
+        : 'Off';
     final choice = await showCupertinoModalPopup<SubtitleTrackChoice>(
       context: context,
       semanticsDismissible: true,
@@ -958,8 +945,8 @@ class _AudioTrackDialog extends StatelessWidget {
   const _AudioTrackDialog({
     required List<AudioTrack> tracks,
     required String? selectedId,
-  })  : _tracks = tracks,
-        _selectedId = selectedId;
+  }) : _tracks = tracks,
+       _selectedId = selectedId;
 
   final List<AudioTrack> _tracks;
   final String? _selectedId;
@@ -994,8 +981,8 @@ class _SubtitleTrackDialog extends StatelessWidget {
     required List<SubtitleTrack> tracks,
     required String? selectedId,
     this.offLabel = 'Off',
-  })  : _tracks = tracks,
-        _selectedId = selectedId;
+  }) : _tracks = tracks,
+       _selectedId = selectedId;
 
   final List<SubtitleTrack> _tracks;
   final String? _selectedId;
@@ -1015,8 +1002,7 @@ class _SubtitleTrackDialog extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (selected)
-              Icon(Icons.check, size: 20.0, color: selectedColor),
+            if (selected) Icon(Icons.check, size: 20.0, color: selectedColor),
             const SizedBox(width: 8.0),
             Flexible(child: Text(label)),
           ],

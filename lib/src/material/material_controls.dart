@@ -14,6 +14,7 @@ import 'package:chewie/src/models/option_item.dart';
 import 'package:chewie/src/models/subtitle_model.dart';
 import 'package:chewie/src/models/subtitle_track.dart';
 import 'package:chewie/src/notifiers/index.dart';
+import 'package:chewie/src/subtitle_overlay.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
@@ -196,7 +197,8 @@ class _MaterialControlsState extends State<MaterialControls>
             await _onAudioTrackButtonTap();
           },
           iconData: Icons.audiotrack_outlined,
-          title: chewieController.optionsTranslation?.audioButtonText ?? 'Audio',
+          title:
+              chewieController.optionsTranslation?.audioButtonText ?? 'Audio',
         ),
     ];
 
@@ -283,24 +285,10 @@ class _MaterialControlsState extends State<MaterialControls>
   }
 
   Widget _subtitleBox(BuildContext context, dynamic text) {
-    if (chewieController.subtitleBuilder != null) {
-      return chewieController.subtitleBuilder!(context, text);
-    }
-
-    return Padding(
-      padding: EdgeInsets.all(marginSize),
-      child: Container(
-        padding: const EdgeInsets.all(5),
-        decoration: BoxDecoration(
-          color: const Color(0x96000000),
-          borderRadius: BorderRadius.circular(10.0),
-        ),
-        child: Text(
-          text.toString(),
-          style: const TextStyle(fontSize: 18),
-          textAlign: TextAlign.center,
-        ),
-      ),
+    return SubtitleOverlay(
+      chewieController: chewieController,
+      margin: EdgeInsets.all(marginSize),
+      text: text,
     );
   }
 
@@ -591,17 +579,18 @@ class _MaterialControlsState extends State<MaterialControls>
     final tracks = chewieController.subtitleTracks;
     return tracks.firstWhere(
       (t) => t.id == _lastSubtitleId,
-      orElse: () => tracks.firstWhere(
-        (t) => t.isDefault,
-        orElse: () => tracks.first,
-      ),
+      orElse: () =>
+          tracks.firstWhere((t) => t.isDefault, orElse: () => tracks.first),
     );
   }
 
   Future<void> _onSubtitleTrackButtonTap() async {
     _hideTimer?.cancel();
 
-    final choice = await showSubtitleTrackBottomSheet(context, chewieController);
+    final choice = await showSubtitleTrackBottomSheet(
+      context,
+      chewieController,
+    );
     if (choice != null) {
       if (choice.track != null) _lastSubtitleId = choice.track!.id;
       await chewieController.selectSubtitleTrack(choice.track);
@@ -638,7 +627,8 @@ class _MaterialControlsState extends State<MaterialControls>
 
   Future<void> _initialize() async {
     // Static-subtitle visibility (the track path derives it from the active id).
-    _subtitleOn = chewieController.showSubtitles &&
+    _subtitleOn =
+        chewieController.showSubtitles &&
         (chewieController.subtitle?.isNotEmpty ?? false);
     // Seed the "restore on toggle" id with whatever starts active.
     _lastSubtitleId = chewieController.activeSubtitleTrackId;
