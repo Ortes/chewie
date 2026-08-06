@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:chewie/src/chewie_progress_colors.dart';
 import 'package:chewie/src/models/audio_track.dart';
 import 'web_fullscreen.dart';
+import 'package:chewie/src/models/chewie_chapter.dart';
 import 'package:chewie/src/models/option_item.dart';
 import 'package:chewie/src/models/options_translation.dart';
 import 'package:chewie/src/models/subtitle_model.dart';
@@ -401,6 +402,7 @@ class ChewieController extends ChangeNotifier {
     this.showSeekIndicator = true,
     this.keyboardSeekDuration = const Duration(seconds: 10),
     this.hideCursorInFullScreen = true,
+    this.chapters = const [],
   }) : _activeAudioTrackId = activeAudioTrackId,
        _activeSubtitleTrackId = activeSubtitleTrackId,
        assert(
@@ -477,6 +479,7 @@ class ChewieController extends ChangeNotifier {
     bool? showSeekIndicator,
     Duration? keyboardSeekDuration,
     bool? hideCursorInFullScreen,
+    List<ChewieChapter>? chapters,
   }) {
     return ChewieController(
       draggableProgressBar: draggableProgressBar ?? this.draggableProgressBar,
@@ -563,6 +566,7 @@ class ChewieController extends ChangeNotifier {
       keyboardSeekDuration: keyboardSeekDuration ?? this.keyboardSeekDuration,
       hideCursorInFullScreen:
           hideCursorInFullScreen ?? this.hideCursorInFullScreen,
+      chapters: chapters ?? this.chapters,
     );
   }
 
@@ -857,6 +861,11 @@ class ChewieController extends ChangeNotifier {
   /// Has no effect outside fullscreen or on devices without a pointer.
   /// Defaults to `true`.
   final bool hideCursorInFullScreen;
+
+  /// Chapters of the video, sorted by ascending start time.
+  /// When non-empty, the progress bar is split into chapter segments and the
+  /// hovered/scrubbed chapter title is displayed above the bar.
+  final List<ChewieChapter> chapters;
 
   static ChewieController of(BuildContext context) {
     final chewieControllerProvider = context

@@ -775,6 +775,7 @@ class _MaterialDesktopControlsState extends State<MaterialDesktopControls>
     return Expanded(
       child: MaterialVideoProgressBar(
         controller,
+        chapters: chewieController.chapters,
         onDragStart: () {
           setState(() {
             _dragging = true;
