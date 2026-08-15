@@ -1,3 +1,6 @@
+## [Unreleased]
+* 🔊 [#949](https://github.com/fluttercommunity/chewie/pull/949): Add source-agnostic multi-track audio selection to the Material controls, via the new `AudioTrack` model and `ChewieController.audioTracks` / `activeAudioTrackId` / `onAudioTrackChanged`. The picker only appears when more than one track is provided. Thanks [Ortes](https://github.com/Ortes).
+
 ## [1.16.2]
 * ⬆️ [#959](https://github.com/fluttercommunity/chewie/pull/959): Add YouTube-style chapters to the progress bar. Pass `ChewieController.chapters` to split the bar into chapter segments and show the hovered/scrubbed chapter title above it. Thanks [Ortes](https://github.com/Ortes).
 * 🛠️ [#968](https://github.com/fluttercommunity/chewie/pull/968): Reformat `_PlaybackSpeedDialog` to satisfy `dart format`. Thanks [Ortes](https://github.com/Ortes).
