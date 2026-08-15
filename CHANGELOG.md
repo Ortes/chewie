@@ -1,3 +1,6 @@
+## [Unreleased]
+* ⏩ [#953](https://github.com/fluttercommunity/chewie/pull/953): Add a YouTube-style seek indicator that flashes the seeked amount when seeking with the keyboard arrows on desktop, accumulating on repeated presses in the same direction (e.g. `10s` → `20s` → `30s`). Configurable via `ChewieController.showSeekIndicator` (default `true`), with the per-press amount set by `ChewieController.keyboardSeekDuration` (default 10 seconds). Thanks [Ortes](https://github.com/Ortes).
+
 ## [1.16.2]
 * ⬆️ [#959](https://github.com/fluttercommunity/chewie/pull/959): Add YouTube-style chapters to the progress bar. Pass `ChewieController.chapters` to split the bar into chapter segments and show the hovered/scrubbed chapter title above it. Thanks [Ortes](https://github.com/Ortes).
 * 🛠️ [#968](https://github.com/fluttercommunity/chewie/pull/968): Reformat `_PlaybackSpeedDialog` to satisfy `dart format`. Thanks [Ortes](https://github.com/Ortes).
