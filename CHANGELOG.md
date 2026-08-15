@@ -1,3 +1,6 @@
+## [Unreleased]
+* 👇 [#930](https://github.com/fluttercommunity/chewie/pull/930): Add `ChewieController.swipeToExitFullscreen` (default `true`) and `swipeThreshold` (default `300` px/s) to exit fullscreen with a downward swipe. Thanks [Ortes](https://github.com/Ortes).
+
 ## [1.16.2]
 * ⬆️ [#959](https://github.com/fluttercommunity/chewie/pull/959): Add YouTube-style chapters to the progress bar. Pass `ChewieController.chapters` to split the bar into chapter segments and show the hovered/scrubbed chapter title above it. Thanks [Ortes](https://github.com/Ortes).
 * 🛠️ [#968](https://github.com/fluttercommunity/chewie/pull/968): Reformat `_PlaybackSpeedDialog` to satisfy `dart format`. Thanks [Ortes](https://github.com/Ortes).
