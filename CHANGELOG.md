@@ -1,3 +1,6 @@
+## [Unreleased]
+* 🖥️ [#947](https://github.com/fluttercommunity/chewie/pull/947): Add `ChewieController.disableFullScreenRoute` (default `false`). When `true`, toggling fullscreen no longer pushes/pops Chewie's internal fullscreen route — `isFullScreen` still flips so the control icon updates, but the player stays mounted in place and the host app owns the fullscreen presentation. Thanks [Ortes](https://github.com/Ortes).
+
 ## [1.16.2]
 * ⬆️ [#959](https://github.com/fluttercommunity/chewie/pull/959): Add YouTube-style chapters to the progress bar. Pass `ChewieController.chapters` to split the bar into chapter segments and show the hovered/scrubbed chapter title above it. Thanks [Ortes](https://github.com/Ortes).
 * 🛠️ [#968](https://github.com/fluttercommunity/chewie/pull/968): Reformat `_PlaybackSpeedDialog` to satisfy `dart format`. Thanks [Ortes](https://github.com/Ortes).
