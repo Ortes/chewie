@@ -208,9 +208,8 @@ class _VideoProgressBarState extends State<VideoProgressBar> {
     }
 
     final Size barSize = renderObject.size;
-    final double relative = (renderObject.globalToLocal(offset).dx /
-            barSize.width)
-        .clamp(0.0, 1.0);
+    final double relative =
+        (renderObject.globalToLocal(offset).dx / barSize.width).clamp(0.0, 1.0);
     final Duration pointedPosition = duration * relative;
     final ChewieChapter? pointedChapter = _chapterAt(pointedPosition);
     final String time = formatDuration(pointedPosition);
