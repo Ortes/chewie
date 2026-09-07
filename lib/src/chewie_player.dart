@@ -49,14 +49,23 @@ class ChewieState extends State<Chewie> {
   late PlayerNotifier notifier;
   late final void Function() _browserFsExitHandler;
 
+  /// Forces the video-element branch on or off, for tests.
+  ///
+  /// [kIsWeb] is a compile-time constant, so the branch below is unreachable
+  /// from a VM test without an override, in the spirit of
+  /// `debugDefaultTargetPlatformOverride`. Reset it to null when done.
+  @visibleForTesting
+  static bool? debugUsesVideoElementFullScreen;
+
   /// Browsers without the Fullscreen API (iPhone Safari) cannot host the
   /// fullscreen route: `requestFullscreen` throws before the route is pushed,
   /// and the next exit request pops the page underneath instead. On those
   /// browsers the video element's own player is used and no route is involved.
   bool get _usesVideoElementFullScreen =>
-      kIsWeb &&
-      widget.controller.useNativeFullScreenOnWeb &&
-      !browserFullscreenSupported;
+      debugUsesVideoElementFullScreen ??
+      (kIsWeb &&
+          widget.controller.useNativeFullScreenOnWeb &&
+          !browserFullscreenSupported);
 
   // ignore: invalid_use_of_visible_for_testing_member
   int get _playerId => widget.controller.videoPlayerController.playerId;
