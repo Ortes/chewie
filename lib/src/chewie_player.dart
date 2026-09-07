@@ -46,6 +46,7 @@ class ChewieState extends State<Chewie> {
   bool _isFullScreen = false;
   bool _wasPlayingBeforeFullScreen = false;
   bool _resumeAppliedInFullScreen = false;
+  TransitionRoute<void>? _fullScreenRoute;
 
   bool get isControllerFullScreen => widget.controller.isFullScreen;
   late PlayerNotifier notifier;
@@ -104,11 +105,29 @@ class ChewieState extends State<Chewie> {
       _isFullScreen = isControllerFullScreen;
       await _pushFullScreenWidget(context);
     } else if (_isFullScreen) {
-      Navigator.of(
-        context,
-        rootNavigator: widget.controller.useRootNavigator,
-      ).pop();
       _isFullScreen = false;
+      _dismissFullScreenRoute();
+    }
+  }
+
+  // Remove only the route Chewie itself pushed. A single fullscreen session can
+  // be exited more than once (collapse button, swipe, browser
+  // `fullscreenchange`), and an unqualified pop() takes the host page with it
+  // once the fullscreen route is already gone.
+  void _dismissFullScreenRoute() {
+    final TransitionRoute<void>? route = _fullScreenRoute;
+    _fullScreenRoute = null;
+    if (route == null || !route.isActive) {
+      return;
+    }
+    final NavigatorState? navigator = route.navigator;
+    if (navigator == null) {
+      return;
+    }
+    if (route.isCurrent) {
+      navigator.pop();
+    } else {
+      navigator.removeRoute(route);
     }
   }
 
@@ -216,6 +235,7 @@ class ChewieState extends State<Chewie> {
     final TransitionRoute<void> route = PageRouteBuilder<void>(
       pageBuilder: _fullScreenRoutePageBuilder,
     );
+    _fullScreenRoute = route;
 
     onEnterFullScreen();
 
@@ -234,6 +254,13 @@ class ChewieState extends State<Chewie> {
       rootNavigator: widget.controller.useRootNavigator,
     ).push(route);
 
+    // The fullscreen route is gone, so drop the fullscreen state before the
+    // awaits below: re-initializing on web takes hundreds of milliseconds and
+    // exitBrowserFullscreen() emits `fullscreenchange`, both of which notify
+    // listeners again while only the host page is left on the stack.
+    _fullScreenRoute = null;
+    _isFullScreen = false;
+
     final wasPlaying = widget.controller.videoPlayerController.value.isPlaying;
 
     if (kIsWeb) {
@@ -245,7 +272,6 @@ class ChewieState extends State<Chewie> {
       }
     }
 
-    _isFullScreen = false;
     widget.controller.exitFullScreen();
 
     if (!widget.controller.allowedScreenSleep) {
