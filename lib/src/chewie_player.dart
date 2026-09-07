@@ -49,6 +49,18 @@ class ChewieState extends State<Chewie> {
   late PlayerNotifier notifier;
   late final void Function() _browserFsExitHandler;
 
+  /// Browsers without the Fullscreen API (iPhone Safari) cannot host the
+  /// fullscreen route: `requestFullscreen` throws before the route is pushed,
+  /// and the next exit request pops the page underneath instead. On those
+  /// browsers the video element's own player is used and no route is involved.
+  bool get _usesVideoElementFullScreen =>
+      kIsWeb &&
+      widget.controller.useNativeFullScreenOnWeb &&
+      !browserFullscreenSupported;
+
+  // ignore: invalid_use_of_visible_for_testing_member
+  int get _playerId => widget.controller.videoPlayerController.playerId;
+
   @override
   void initState() {
     super.initState();
@@ -71,6 +83,9 @@ class ChewieState extends State<Chewie> {
     if (widget.controller.useNativeFullScreenOnWeb) {
       removeBrowserFullscreenChangeListener(_browserFsExitHandler);
     }
+    if (_usesVideoElementFullScreen) {
+      disposeVideoElementFullscreen(_playerId);
+    }
     widget.controller.removeListener(listener);
     notifier.dispose();
     super.dispose();
@@ -88,6 +103,18 @@ class ChewieState extends State<Chewie> {
   }
 
   Future<void> listener() async {
+    if (_usesVideoElementFullScreen) {
+      _isFullScreen = isControllerFullScreen;
+      if (_isFullScreen) {
+        enterVideoElementFullscreen(
+          _playerId,
+          widget.controller.exitFullScreen,
+        );
+      } else {
+        exitVideoElementFullscreen(_playerId);
+      }
+      return;
+    }
     if (isControllerFullScreen && !_isFullScreen) {
       _wasPlayingBeforeFullScreen =
           widget.controller.videoPlayerController.value.isPlaying;
